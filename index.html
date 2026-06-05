@@ -8874,47 +8874,55 @@
       return item;
     }
 
+    function dependencyMappingPatches() {
+      const noneOnly = [["00", "：无"]];
+      const plugAndCover = [
+        ["00", "：无"],
+        ["01", "：防尘塞堵头"],
+        ["02", "：内螺纹保护套"],
+        ["03", "：外螺纹保护套"],
+        ["05", "：水管管帽"],
+        ["06", "：塑料定位卡"],
+        ["07", "：热塑套管"],
+        ["08", "：塑料堵头"],
+        ["09", "：钳口包装棉（俄罗斯）"],
+        ["10", "：环摸钳口包装棉"]
+      ];
+      const insulationShell = [
+        ["00", "：无"],
+        ["01", "对接"],
+        ["02", "A45°弯头"],
+        ["03", "A90°弯头"],
+        ["04", "B45°弯头"],
+        ["05", "B90°弯头"],
+        ["06", "：三通"]
+      ];
+      return [
+        { include: ["水管成品"], exclude: ["样"], dependencyField: "分类名称", codes: { "09": noneOnly } },
+        { include: ["其他辅料"], exclude: ["保温层"], dependencyField: "分类名称", codes: { "4": plugAndCover } },
+        { include: ["保温层"], dependencyField: "分类名称", codes: { "6": insulationShell, "7": insulationShell, "8": insulationShell } }
+      ];
+    }
+
+    function ruleNameMatches(rule, patch) {
+      const name = String(rule.name || "");
+      const includes = patch.include || [];
+      const excludes = patch.exclude || [];
+      return includes.every(text => name.includes(text)) && excludes.every(text => !name.includes(text));
+    }
+
     function ensureKnownDependencyMappings(dataSet) {
+      const patches = dependencyMappingPatches();
       (dataSet.rules || []).forEach(rule => {
-        const dep = rule.dependencies && rule.dependencies["分类名称"];
-        if (!dep || !dep.map) return;
-        const name = String(rule.name || "");
-
-        if (name.includes("水管成品") && !name.includes("样") && !dep.map["09"]) {
-          dep.map["09"] = [["00", "：无"]];
-        }
-
-        if (name.includes("其他辅料") && !name.includes("保温层")) {
-          if (!dep.map["4"]) {
-            dep.map["4"] = [
-              ["00", "：无"],
-              ["01", "：防尘塞堵头"],
-              ["02", "：内螺纹保护套"],
-              ["03", "：外螺纹保护套"],
-              ["05", "：水管管帽"],
-              ["06", "：塑料定位卡"],
-              ["07", "：热塑套管"],
-              ["08", "：塑料堵头"],
-              ["09", "：钳口包装棉（俄罗斯）"],
-              ["10", "：环摸钳口包装棉"]
-            ];
-          }
-        }
-
-        if (name.includes("保温层")) {
-          const insulationShellValues = [
-            ["00", "：无"],
-            ["01", "对接"],
-            ["02", "A45°弯头"],
-            ["03", "A90°弯头"],
-            ["04", "B45°弯头"],
-            ["05", "B90°弯头"],
-            ["06", "：三通"]
-          ];
-          ["6", "7", "8"].forEach(code => {
-            if (!dep.map[code]) dep.map[code] = insulationShellValues;
+        patches
+          .filter(patch => ruleNameMatches(rule, patch))
+          .forEach(patch => {
+            const dep = rule.dependencies && rule.dependencies[patch.dependencyField];
+            if (!dep || !dep.map) return;
+            Object.entries(patch.codes).forEach(([code, values]) => {
+              if (!dep.map[code]) dep.map[code] = values.map(([itemCode, itemName]) => [itemCode, itemName]);
+            });
           });
-        }
       });
       return dataSet;
     }
@@ -9344,19 +9352,40 @@
         <div class="basis">查重依据：产品名称 + 规格型号 + 材质 + 连接方式 + 产品类型</div>`;
     }
 
-    function preferredRuleForSelections(selections) {
-      const connectionCode = selections["连接分类1"] || selections["连接分类"];
-      if (connectionCode) {
-        const current = activeRule();
-        const activeRules = rulesForActiveGroup();
-        const nameIncludes = text => rule => String(rule.name || "").includes(text);
-        let target = null;
-        if (connectionCode === "8") target = activeRules.find(nameIncludes("分水器"));
-        if (connectionCode === "6") target = activeRules.find(nameIncludes("定制件"));
-        if (connectionCode === "7") target = activeRules.find(nameIncludes("配件"));
-        if (["0", "1", "2", "3", "4", "5", "9"].includes(connectionCode)) {
-          target = activeRules.find(rule => String(rule.name || "").includes("管件") && !String(rule.name || "").includes("定制") && !String(rule.name || "").includes("配件") && !String(rule.name || "").includes("分水器"));
+    function ruleSwitchConfigurations() {
+      return [
+        {
+          fields: ["连接分类1", "连接分类"],
+          codeTargets: {
+            "8": { include: ["分水器"] },
+            "6": { include: ["定制件"] },
+            "7": { include: ["配件"] },
+            "0": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "1": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "2": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "3": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "4": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "5": { include: ["管件"], exclude: ["定制", "配件", "分水器"] },
+            "9": { include: ["管件"], exclude: ["定制", "配件", "分水器"] }
+          }
         }
+      ];
+    }
+
+    function ruleMatchesTarget(rule, target) {
+      const name = String(rule.name || "");
+      const includes = target.include || [];
+      const excludes = target.exclude || [];
+      return includes.every(text => name.includes(text)) && excludes.every(text => !name.includes(text));
+    }
+
+    function preferredRuleForSelections(selections) {
+      const current = activeRule();
+      const activeRules = rulesForActiveGroup();
+      for (const config of ruleSwitchConfigurations()) {
+        const code = config.fields.map(field => selections[field]).find(Boolean);
+        const targetConfig = code && config.codeTargets[code];
+        const target = targetConfig && activeRules.find(rule => ruleMatchesTarget(rule, targetConfig));
         if (target && target.id !== current.id) return target;
       }
       const className = "分类名称";
@@ -10249,8 +10278,35 @@
       });
     }
 
+    function auditRuleMappings(dataSet) {
+      const issues = [];
+      groups().forEach(group => {
+        const rules = dataSet.rules.filter(rule => rule.group === group);
+        const dependencyCodes = new Set();
+        const dependencyParents = new Set();
+        rules.forEach(rule => {
+          Object.values(rule.dependencies || {}).forEach(dependency => {
+            dependencyParents.add(dependency.dependsOn);
+            Object.keys(dependency.map || {}).forEach(code => dependencyCodes.add(code));
+          });
+        });
+        dependencyParents.forEach(parentName => {
+          const parentCodes = new Set();
+          rules.forEach(rule => {
+            const parentSegment = rule.segments.find(segment => segment.name === parentName);
+            if (parentSegment) parentSegment.values.forEach(([code]) => parentCodes.add(code));
+          });
+          const missing = [...parentCodes].filter(code => !["0", "00"].includes(code) && !dependencyCodes.has(code));
+          if (missing.length) issues.push({ group, parentName, missing });
+        });
+      });
+      if (issues.length) console.warn("编码规则存在未映射码值", issues);
+      return issues;
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
     mountGeneratorLayout();
+    auditRuleMappings(data);
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
