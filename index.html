@@ -8874,6 +8874,51 @@
       return item;
     }
 
+    function ensureKnownDependencyMappings(dataSet) {
+      (dataSet.rules || []).forEach(rule => {
+        const dep = rule.dependencies && rule.dependencies["分类名称"];
+        if (!dep || !dep.map) return;
+        const name = String(rule.name || "");
+
+        if (name.includes("水管成品") && !name.includes("样") && !dep.map["09"]) {
+          dep.map["09"] = [["00", "：无"]];
+        }
+
+        if (name.includes("其他辅料") && !name.includes("保温层")) {
+          if (!dep.map["4"]) {
+            dep.map["4"] = [
+              ["00", "：无"],
+              ["01", "：防尘塞堵头"],
+              ["02", "：内螺纹保护套"],
+              ["03", "：外螺纹保护套"],
+              ["05", "：水管管帽"],
+              ["06", "：塑料定位卡"],
+              ["07", "：热塑套管"],
+              ["08", "：塑料堵头"],
+              ["09", "：钳口包装棉（俄罗斯）"],
+              ["10", "：环摸钳口包装棉"]
+            ];
+          }
+        }
+
+        if (name.includes("保温层")) {
+          const insulationShellValues = [
+            ["00", "：无"],
+            ["01", "对接"],
+            ["02", "A45°弯头"],
+            ["03", "A90°弯头"],
+            ["04", "B45°弯头"],
+            ["05", "B90°弯头"],
+            ["06", "：三通"]
+          ];
+          ["6", "7", "8"].forEach(code => {
+            if (!dep.map[code]) dep.map[code] = insulationShellValues;
+          });
+        }
+      });
+      return dataSet;
+    }
+
     function dictionaryDefinitions() {
       return [
         { code: "product", name: "品类字典", match: segment => segment.name === "品名" },
@@ -8901,6 +8946,7 @@
     function normalizeDictionaryData(source) {
       const dataSet = source || cloneData(sampleData);
       if (!dataSet.rules || !dataSet.rules.length) dataSet.rules = cloneData(sampleData.rules || []);
+      ensureKnownDependencyMappings(dataSet);
       dataSet.dictionaryCategories = dataSet.dictionaryCategories || [];
       dataSet.dictionaryItems = dataSet.dictionaryItems || [];
       dataSet.dictionaryChangeLogs = dataSet.dictionaryChangeLogs || [];
