@@ -9299,6 +9299,20 @@
     }
 
     function preferredRuleForSelections(selections) {
+      const connectionCode = selections["连接分类1"] || selections["连接分类"];
+      if (connectionCode) {
+        const current = activeRule();
+        const activeRules = rulesForActiveGroup();
+        const nameIncludes = text => rule => String(rule.name || "").includes(text);
+        let target = null;
+        if (connectionCode === "8") target = activeRules.find(nameIncludes("分水器"));
+        if (connectionCode === "6") target = activeRules.find(nameIncludes("定制件"));
+        if (connectionCode === "7") target = activeRules.find(nameIncludes("配件"));
+        if (["0", "1", "2", "3", "4", "5", "9"].includes(connectionCode)) {
+          target = activeRules.find(rule => String(rule.name || "").includes("管件") && !String(rule.name || "").includes("定制") && !String(rule.name || "").includes("配件") && !String(rule.name || "").includes("分水器"));
+        }
+        if (target && target.id !== current.id) return target;
+      }
       const className = "分类名称";
       const typeName = "类型分类";
       const typeCode = selections[typeName];
@@ -9320,7 +9334,10 @@
         const select = document.createElement("select");
         select.dataset.segment = segment.key;
         fillSegmentOptions(select, segment.values);
-        if (preferredSelections[segment.name] && segment.values.some(([code]) => code === preferredSelections[segment.name])) select.value = preferredSelections[segment.name];
+        const preferredValue = preferredSelections[segment.name]
+          || (segment.name === "连接分类" ? preferredSelections["连接分类1"] : "")
+          || (segment.name === "连接分类1" ? preferredSelections["连接分类"] : "");
+        if (preferredValue && segment.values.some(([code]) => code === preferredValue)) select.value = preferredValue;
         select.addEventListener("change", () => {
           const selections = currentInputSelections();
           const nextRule = preferredRuleForSelections(selections);
